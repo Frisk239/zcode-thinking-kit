@@ -6,6 +6,7 @@ proxy.out.log
 proxy.err.log
 .pid
 .node-pid
+proxy.pid
 
 # local data copies
 .data/
