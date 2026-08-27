@@ -1,6 +1,6 @@
 {
   "name": "zcode-thinking-kit",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Local loopback proxy that injects reasoning/thinking strength for ZCode custom models.",
   "type": "module",
   "bin": {
@@ -13,12 +13,13 @@
     "status": "node cli.mjs status",
     "doctor": "node cli.mjs doctor",
     "suggest": "node cli.mjs suggest",
-    "test": "node --test test/inject.test.mjs test/follow-log.test.mjs test/suggest.test.mjs test/pid.test.mjs test/proxy.test.mjs test/cli-lifecycle.test.mjs"
+    "test": "node --test test/inject.test.mjs test/follow-log.test.mjs test/suggest.test.mjs test/pid.test.mjs test/proxy.test.mjs test/cli-lifecycle.test.mjs test/console.test.mjs"
   },
   "files": [
     "cli.mjs",
     "server.mjs",
     "lib",
+    "public",
     "thinking.config.example.json",
     "README.md",
     "README_CN.md",

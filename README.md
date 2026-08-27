@@ -35,7 +35,7 @@ node cli.mjs doctor
 node cli.mjs status
 ```
 
-Open `http://127.0.0.1:38771/health`. Then in ZCode, change only the host/port of the provider `baseURL`, keep the path, start a **new session**.
+Open the console at `http://127.0.0.1:38771/` (plain HTML, no framework) or `http://127.0.0.1:38771/health`. Copy the proxied `baseURL`, paste it into ZCode (keep the path), then start a **new session**. The console exists only while the proxy is running — start it with `cli start` / `start.bat`.
 
 Stop with `node cli.mjs stop` (kills the process only if `/health` is this kit). Foreground: `node cli.mjs run`.
 

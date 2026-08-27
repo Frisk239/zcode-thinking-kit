@@ -12,6 +12,7 @@ import {
   dataDir,
   defaultAuditPath,
   defaultLogDir,
+  defaultZcodeV2Config,
   ensureDataDir,
   pidPath,
   resolveConfigPath,
@@ -186,13 +187,21 @@ function watchConfig() {
   }
 }
 
-const server = createProxyServer({ getCfg: () => cfg, state, audit, say });
+const server = createProxyServer({
+  getCfg: () => cfg,
+  state,
+  audit,
+  say,
+  auditPath: AUDIT_PATH,
+  v2Path: defaultZcodeV2Config(),
+});
 
 server.listen(listenSnapshot.port, listenSnapshot.host, () => {
   persistPid();
   say(`zcode-thinking-kit 代理已启动: http://${listenSnapshot.host}:${listenSnapshot.port}`);
   say(`配置: ${CONFIG_PATH}`);
   say(`审计日志: ${AUDIT_PATH}`);
+  say(`控制台: http://${listenSnapshot.host}:${listenSnapshot.port}/`);
   say(`健康检查: http://${listenSnapshot.host}:${listenSnapshot.port}/health`);
   for (const r of cfg.routes || []) say(`路由: ${r.match} -> ${r.upstream}`);
   watchConfig();

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>zcode-thinking-kit</title>
+  <style>
+    :root {
+      --bg: #12110e;
+      --panel: #1c1a16;
+      --line: #3a342c;
+      --ink: #efe7d6;
+      --muted: #9a917f;
+      --ok: #7cb389;
+      --warn: #d4a24a;
+      --bad: #c96b5a;
+      --accent: #e0b45a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); }
+    body {
+      font: 15px/1.45 "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+      padding: 28px 20px 64px;
+    }
+    main { max-width: 860px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+    h1 { font-size: 22px; font-weight: 650; margin: 0 0 6px; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); font-size: 13px; }
+    button, .btn {
+      font: inherit; cursor: pointer; border: 1px solid var(--line);
+      background: #2a261f; color: var(--ink); padding: 6px 10px; border-radius: 6px;
+    }
+    button:hover { border-color: var(--accent); }
+    .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 8px; }
+    .pulse.down { background: var(--bad); }
+    .banner {
+      border: 1px solid #5c4a22; background: #2a2214; color: #e8d7a8;
+      padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+    }
+    .grid { display: grid; gap: 12px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+    }
+    .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 10px; }
+    .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 13px; }
+    .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; word-break: break-all; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    .warn { color: var(--warn); }
+    ol.steps { margin: 0; padding-left: 18px; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    pre { margin: 0; white-space: pre-wrap; font-size: 12px; color: var(--muted); max-height: 240px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>zcode-thinking-kit</h1>
+        <div class="sub" id="listen">本机回环代理控制台 · 原生 HTML，无框架</div>
+      </div>
+      <button type="button" id="lang">EN</button>
+    </header>
+    <div class="banner" id="honest"></div>
+    <div class="grid">
+      <section class="card">
+        <h2 id="h-status">状态</h2>
+        <div class="kv" id="status"></div>
+      </section>
+      <section class="card">
+        <h2 id="h-steps">把思考档位接到 ZCode</h2>
+        <ol class="steps" id="steps"></ol>
+      </section>
+      <section class="card">
+        <h2 id="h-routes">路由 / 复制 baseURL</h2>
+        <div id="routes"></div>
+      </section>
+      <section class="card">
+        <h2 id="h-doctor">Doctor</h2>
+        <div id="doctor"></div>
+      </section>
+      <section class="card">
+        <h2 id="h-suggest">从 ZCode 配置建议路由</h2>
+        <div class="row">
+          <button type="button" id="copy-suggest">复制 JSON</button>
+          <span class="sub" id="suggest-note"></span>
+        </div>
+        <pre id="suggest"></pre>
+      </section>
+      <section class="card">
+        <h2 id="h-audit">最近注入（不含密钥）</h2>
+        <div style="overflow:auto"><table id="audit"></table></div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const SOURCE = {
+      session: { zh: '已按会话命中 x-session-id', en: 'hit session map via x-session-id' },
+      'model-suffix': { zh: '来自模型名后缀，如 foo(high)', en: 'from model id suffix e.g. foo(high)' },
+      'session-fallback': { zh: '主会话最后一档（近似继承，不是精确父会话）', en: 'last main-session level (inherit-shaped, not parent-exact)' },
+      static: { zh: '配置里的 staticLevel', en: 'staticLevel from config' }
+    };
+    const I18N = {
+      zh: {
+        honest: '子智能体若单独指定了思考档位，内核日志里往往没有对应事件，本工具可能不准。热加载不改端口。本页由代理提供：代理没启动就打不开。不要写 localhost，用 127.0.0.1。改完 baseURL 必须新开会话。',
+        steps: ['能打开本页 = 代理已在跑（启动请用 start.bat / node cli.mjs start）', '复制下面的 proxied baseURL', '贴进 ZCode 对应 provider，只改主机和端口，保留路径', '新开一个会话再试思考档位'],
+        copy: '复制 proxied URL',
+        copied: '已复制',
+        empty: '没有路由。先配置 thinking.config.json 或看下方 suggest。',
+        orig: '原地址',
+        proxied: '改成',
+        follow: '跟随会话',
+        none: '—',
+        suggestFail: '没有找到 ZCode v2 配置，或读取失败。',
+        auditEmpty: '还没有审计记录。'
+      },
+      en: {
+        honest: 'A subagent with its own thoughtLevel is often missing from kernel logs, so this kit may be wrong for that case. Hot reload does not change the port. This page is served by the proxy: if the proxy is down, there is no UI. Use 127.0.0.1 not localhost. Start a new ZCode session after changing baseURL.',
+        steps: ['This page loading means the proxy is up (start with start.bat / node cli.mjs start)', 'Copy a proxied baseURL below', 'Paste into that ZCode provider; keep the path', 'Open a new session before testing thought level'],
+        copy: 'Copy proxied URL',
+        copied: 'Copied',
+        empty: 'No routes. Edit thinking.config.json or use suggest below.',
+        orig: 'original',
+        proxied: 'proxied',
+        follow: 'follow session',
+        none: '—',
+        suggestFail: 'ZCode v2 config missing or unreadable.',
+        auditEmpty: 'No audit entries yet.'
+      }
+    };
+    let lang = localStorage.getItem('kit-lang') === 'en' ? 'en' : 'zh';
+    let suggestJson = '';
+
+    const $ = (id) => document.getElementById(id);
+    async function get(path) {
+      const r = await fetch(path, { cache: 'no-store' });
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('json')) return r.json();
+      return r.text();
+    }
+    function sourceLabel(src) {
+      const row = SOURCE[src];
+      return row ? row[lang] : (src || I18N[lang].none);
+    }
+    function copyText(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const old = btn.textContent;
+        btn.textContent = I18N[lang].copied;
+        setTimeout(() => { btn.textContent = old; }, 1200);
+      });
+    }
+    function renderStatus(h) {
+      const li = h.lastInject;
+      $('status').innerHTML = [
+        ['alive', '<span class="pulse"></span>ok'],
+        ['listen', `<span class="mono">${h.listen || ''}</span>`],
+        ['started', h.startedAt || ''],
+        ['fallback level', h.sessionLevel || I18N[lang].none],
+        ['session map', h.sessionCount ?? 0],
+        ['last inject', li ? `${li.model} · ${li.level} · ${sourceLabel(li.source)}` : I18N[lang].none],
+        ['hot reload', h.hotReload || '']
+      ].map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join('');
+    }
+    function renderRoutes(data) {
+      const t = I18N[lang];
+      if (!data.routes || !data.routes.length) {
+        $('routes').innerHTML = `<p class="sub">${t.empty}</p>`;
+        return;
+      }
+      $('routes').innerHTML = data.routes.map((r, i) => `
+        <div style="margin-bottom:14px">
+          <div class="mono">${r.match} → ${r.upstream}</div>
+          <div class="sub">${t.orig}: <span class="mono">${r.original}</span></div>
+          <div>${t.proxied}: <span class="mono">${r.proxied}</span></div>
+          <div class="sub">${t.follow}: ${r.followSession ? 'yes' : 'no'}</div>
+          <div class="row"><button type="button" data-copy="${i}">${t.copy}</button></div>
+        </div>`).join('');
+      $('routes').querySelectorAll('button[data-copy]').forEach((btn) => {
+        btn.onclick = () => copyText(data.routes[Number(btn.dataset.copy)].proxied, btn);
+      });
+    }
+    function renderDoctor(d) {
+      if (!d || !d.checks) { $('doctor').textContent = I18N[lang].none; return; }
+      $('doctor').innerHTML = d.checks.map((c) =>
+        `<div><span class="${c.ok ? 'ok' : 'bad'}">${c.ok ? 'ok' : 'fail'}</span> <span class="mono">${c.id}</span> · <span class="sub">${c.detail || ''}</span></div>`
+      ).join('');
+    }
+    function renderSuggest(s) {
+      const t = I18N[lang];
+      if (!s || s.ok === false) {
+        suggestJson = '';
+        $('suggest').textContent = (s && s.error) || t.suggestFail;
+        $('suggest-note').textContent = '';
+        return;
+      }
+      const payload = { listen: s.listen, levelSource: s.levelSource, routes: (s.routes || []).map(({ original, proxied, ...r }) => r) };
+      suggestJson = JSON.stringify(payload, null, 2);
+      $('suggest').textContent = suggestJson;
+      $('suggest-note').textContent = s.note || '';
+    }
+    function renderAudit(a) {
+      const t = I18N[lang];
+      const rows = (a && a.entries) || [];
+      if (!rows.length) { $('audit').innerHTML = `<tr><td class="sub">${t.auditEmpty}</td></tr>`; return; }
+      $('audit').innerHTML = '<tr><th>ts</th><th>kind</th><th>model</th><th>level</th><th>url</th></tr>' +
+        rows.slice().reverse().map((e) => `<tr><td class="mono">${e.ts || ''}</td><td>${e.kind || e.dir || ''}</td><td class="mono">${e.model || ''}</td><td>${e.level || ''} ${e.levelSource ? '(' + sourceLabel(e.levelSource) + ')' : ''}</td><td class="mono">${e.url || ''}</td></tr>`).join('');
+    }
+    function applyLang() {
+      const t = I18N[lang];
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+      $('lang').textContent = lang === 'zh' ? 'EN' : '中文';
+      $('honest').textContent = t.honest;
+      $('steps').innerHTML = t.steps.map((s) => `<li>${s}</li>`).join('');
+    }
+    async function tick() {
+      try {
+        const [h, urls, doc, sug, aud] = await Promise.all([
+          get('/health'),
+          get('/api/copy-baseurls'),
+          get('/api/doctor'),
+          get('/api/suggest'),
+          get('/api/audit?limit=40')
+        ]);
+        $('listen').textContent = h.listen || '';
+        renderStatus(h);
+        renderRoutes(urls);
+        renderDoctor(doc);
+        renderSuggest(sug);
+        renderAudit(aud);
+      } catch {
+        $('status').innerHTML = `<div>alive</div><div><span class="pulse down"></span>down</div>`;
+      }
+    }
+    $('lang').onclick = () => {
+      lang = lang === 'zh' ? 'en' : 'zh';
+      localStorage.setItem('kit-lang', lang);
+      applyLang();
+      tick();
+    };
+    $('copy-suggest').onclick = () => {
+      if (suggestJson) copyText(suggestJson, $('copy-suggest'));
+    };
+    applyLang();
+    tick();
+    setInterval(tick, 2500);
+  </script>
+</body>
+</html>

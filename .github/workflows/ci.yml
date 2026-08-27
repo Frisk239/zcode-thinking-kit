@@ -30,7 +30,7 @@ jobs:
 
       # no npm install: this package has zero dependencies and no lockfile
       - name: syntax
-        run: node --check cli.mjs server.mjs lib/inject.mjs lib/paths.mjs lib/suggest.mjs lib/follow-log.mjs lib/pid.mjs lib/headers.mjs lib/proxy.mjs
+        run: node --check cli.mjs server.mjs lib/inject.mjs lib/paths.mjs lib/suggest.mjs lib/follow-log.mjs lib/pid.mjs lib/headers.mjs lib/proxy.mjs lib/console-api.mjs lib/doctor.mjs
 
       - name: unit
         run: npm test

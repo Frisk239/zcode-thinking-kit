@@ -35,7 +35,7 @@ node cli.mjs doctor
 node cli.mjs status
 ```
 
-打开 `http://127.0.0.1:38771/health`。然后在 ZCode 里只改 provider `baseURL` 的协议/主机/端口，保留路径，**新开会话**生效。
+打开控制台 `http://127.0.0.1:38771/`（原生 HTML，无框架）或 `/health`。复制 proxied `baseURL`，贴进 ZCode（保留路径），再**新开会话**。页面由代理提供，没 `start` 就没有页面。
 
 停止：`node cli.mjs stop`（确认 `/health` 是本工具后才杀进程）。前台：`node cli.mjs run`。
 
