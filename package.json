@@ -1,0 +1,37 @@
+{
+  "name": "zcode-thinking-kit",
+  "version": "0.2.0",
+  "description": "Local loopback proxy that injects reasoning/thinking strength for ZCode custom models.",
+  "type": "module",
+  "bin": {
+    "zcode-thinking-kit": "./cli.mjs"
+  },
+  "scripts": {
+    "run": "node server.mjs",
+    "start": "node cli.mjs start",
+    "stop": "node cli.mjs stop",
+    "status": "node cli.mjs status",
+    "doctor": "node cli.mjs doctor",
+    "suggest": "node cli.mjs suggest",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "zcode",
+    "proxy",
+    "reasoning",
+    "thinking",
+    "llm"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Frisk239/zcode-thinking-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Frisk239/zcode-thinking-kit/issues"
+  },
+  "homepage": "https://github.com/Frisk239/zcode-thinking-kit"
+}

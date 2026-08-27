@@ -1,0 +1,19 @@
+# runtime
+thinking.config.json
+audit.jsonl
+*.log
+proxy.out.log
+proxy.err.log
+.pid
+.node-pid
+
+# local data copies
+.data/
+.kit-data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

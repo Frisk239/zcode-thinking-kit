@@ -1,0 +1,19 @@
+{
+  "listen": { "host": "127.0.0.1", "port": 38771 },
+  "levelSource": {
+    "followZcodeLog": true,
+    "staticLevel": "high"
+  },
+  "routes": [
+    {
+      "match": "/zen/go/v1",
+      "upstream": "https://opencode.ai",
+      "followSession": true,
+      "staticLevel": "high",
+      "defaultInject": {
+        "chat/completions": { "reasoning_effort": "{level}" },
+        "responses": { "reasoning": { "effort": "{level}" } }
+      }
+    }
+  ]
+}
