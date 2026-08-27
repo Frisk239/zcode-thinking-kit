@@ -13,6 +13,7 @@ import {
   pidPath,
   resolveConfigPath,
 } from './lib/paths.mjs';
+import { processExists, readPidRecord, removePidFile } from './lib/pid.mjs';
 import { readJson, suggestFromZcodeConfig } from './lib/suggest.mjs';
 
 const [cmd = 'help', ...rest] = process.argv.slice(2);
@@ -21,6 +22,10 @@ const configArg = rest.find((a) => a.startsWith('--config='))?.slice('--config='
 function die(msg, code = 1) {
   console.error(msg);
   process.exit(code);
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function configPath() {
@@ -49,26 +54,6 @@ function listenFromConfig() {
   }
 }
 
-function readPid() {
-  try {
-    const raw = fs.readFileSync(pidPath(), 'utf8').trim();
-    const n = Number(raw);
-    return Number.isInteger(n) && n > 0 ? n : null;
-  } catch {
-    return null;
-  }
-}
-
-function isAlive(pid) {
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function fetchHealth(port) {
   return new Promise((resolve) => {
     const req = http.get({ host: '127.0.0.1', port, path: '/health', timeout: 1500 }, (res) => {
@@ -76,7 +61,8 @@ function fetchHealth(port) {
       res.on('data', (c) => (buf += c));
       res.on('end', () => {
         try {
-          resolve({ ok: res.statusCode === 200, json: JSON.parse(buf) });
+          const json = JSON.parse(buf);
+          resolve({ ok: res.statusCode === 200 && json.name === 'zcode-thinking-kit', json });
         } catch {
           resolve({ ok: false, json: null });
         }
@@ -90,17 +76,38 @@ function fetchHealth(port) {
   });
 }
 
+async function waitHealth(port, timeoutMs = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const h = await fetchHealth(port);
+    if (h.ok) return h;
+    await sleep(150);
+  }
+  return { ok: false, json: null };
+}
+
+function tailFile(file, maxBytes = 4000) {
+  try {
+    const buf = fs.readFileSync(file);
+    const slice = buf.length > maxBytes ? buf.subarray(buf.length - maxBytes) : buf;
+    return slice.toString('utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
 async function cmdStatus() {
   const { port } = listenFromConfig();
-  const pid = readPid();
+  const rec = readPidRecord(pidPath());
   const health = await fetchHealth(port);
-  const alive = isAlive(pid);
+  const alive = rec ? processExists(rec.pid) : false;
   console.log(`config:  ${configPath()}`);
-  console.log(`pid:     ${pid || '-'} ${alive ? '(alive)' : pid ? '(stale)' : ''}`);
+  console.log(`pid:     ${rec ? rec.pid : '-'} ${alive ? '(alive)' : rec ? '(stale)' : ''}`);
   console.log(`listen:  http://127.0.0.1:${port}`);
   console.log(`health:  ${health.ok ? 'ok' : 'down'}`);
   if (health.json) {
     console.log(`level:   ${health.json.sessionLevel || '-'} @ ${health.json.sessionLevelAt || '-'}`);
+    console.log(`sessions:${health.json.sessionCount ?? '-'}`);
     for (const r of health.json.routes || []) {
       console.log(`route:   ${r.match} -> ${r.upstream}`);
     }
@@ -108,47 +115,85 @@ async function cmdStatus() {
   process.exit(health.ok ? 0 : 1);
 }
 
-function cmdStart() {
+async function cmdStart() {
   ensureDataDir();
   const cfg = ensureConfig();
   const { port } = listenFromConfig();
-  const pid = readPid();
-  if (isAlive(pid)) {
-    console.log(`[OK] already running pid=${pid} http://127.0.0.1:${port}`);
+  const health = await fetchHealth(port);
+  if (health.ok) {
+    const rec = readPidRecord(pidPath());
+    console.log(`[OK] already running pid=${rec ? rec.pid : '?'} http://127.0.0.1:${port}`);
     return;
   }
+  const rec = readPidRecord(pidPath());
+  if (rec && processExists(rec.pid) && !health.ok) {
+    die(`port ${port} is not this kit, but pid ${rec.pid} is still alive; not starting`);
+  }
+  if (rec && !processExists(rec.pid)) removePidFile(pidPath());
+
+  const errLog = path.join(dataDir(), 'proxy.err.log');
+  const outLog = path.join(dataDir(), 'proxy.out.log');
+  const outFd = fs.openSync(outLog, 'a');
+  const errFd = fs.openSync(errLog, 'a');
   const child = spawn(process.execPath, [path.join(KIT_DIR, 'server.mjs'), `--config=${cfg}`], {
     cwd: KIT_DIR,
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', outFd, errFd],
     windowsHide: true,
+    env: process.env,
   });
+  fs.closeSync(outFd);
+  fs.closeSync(errFd);
   child.unref();
+
+  const ready = await waitHealth(port);
+  if (!ready.ok) {
+    const tail = tailFile(errLog);
+    console.error(`[FAIL] started pid=${child.pid} but /health did not come up on :${port}`);
+    if (tail) console.error(tail);
+    process.exit(1);
+  }
   console.log(`[OK] started pid=${child.pid} http://127.0.0.1:${port}/health`);
   console.log(`config ${cfg}`);
 }
 
-function cmdStop() {
-  const pid = readPid();
-  if (!pid) {
-    console.log('not running (no pid file)');
+async function cmdStop() {
+  const { port } = listenFromConfig();
+  const rec = readPidRecord(pidPath());
+  const health = await fetchHealth(port);
+
+  if (health.ok && rec && processExists(rec.pid)) {
+    try {
+      process.kill(rec.pid);
+    } catch (e) {
+      die(`stop failed: ${e.message}`);
+    }
+    for (let i = 0; i < 20; i++) {
+      if (!processExists(rec.pid)) break;
+      await sleep(100);
+    }
+    removePidFile(pidPath(), rec.pid);
+    console.log(`[OK] stopped pid=${rec.pid}`);
     return;
   }
-  if (!isAlive(pid)) {
-    try {
-      fs.unlinkSync(pidPath());
-    } catch {
-      /* ignore */
-    }
+
+  if (health.ok && (!rec || !processExists(rec && rec.pid))) {
+    console.log('[WARN] /health is up but pid file does not match; not killing unknown process');
+    process.exit(1);
+  }
+
+  if (rec && processExists(rec.pid) && !health.ok) {
+    console.log(`[WARN] pid ${rec.pid} is alive but is not this kit on :${port}; not killing`);
+    removePidFile(pidPath(), rec.pid);
+    process.exit(1);
+  }
+
+  if (rec) {
+    removePidFile(pidPath());
     console.log('not running (stale pid removed)');
     return;
   }
-  try {
-    process.kill(pid);
-    console.log(`[OK] stopped pid=${pid}`);
-  } catch (e) {
-    die(`stop failed: ${e.message}`);
-  }
+  console.log('not running (no pid file)');
 }
 
 function cmdRun() {
@@ -156,6 +201,7 @@ function cmdRun() {
   const child = spawn(process.execPath, [path.join(KIT_DIR, 'server.mjs'), `--config=${cfg}`], {
     cwd: KIT_DIR,
     stdio: 'inherit',
+    env: process.env,
   });
   child.on('exit', (code) => process.exit(code ?? 0));
 }
@@ -171,7 +217,10 @@ function cmdDoctor() {
     const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     const routes = cfg.routes || [];
     console.log(`routes   ${routes.length}`);
-    for (const r of routes) console.log(`  ${r.match} -> ${r.upstream}`);
+    for (const r of routes) {
+      console.log(`  ${r.match} -> ${r.upstream}`);
+      if (!r.defaultInject) problems.push(`route ${r.match} has no defaultInject`);
+    }
     if (!routes.length) problems.push('no routes configured');
   } catch (e) {
     problems.push(`config parse: ${e.message}`);
@@ -219,8 +268,8 @@ function cmdHelp() {
   console.log(`zcode-thinking-kit — inject reasoning/thinking for ZCode custom models
 
 Usage:
-  node cli.mjs start              start detached on 127.0.0.1
-  node cli.mjs stop
+  node cli.mjs start              start detached on 127.0.0.1; waits for /health
+  node cli.mjs stop               stop only if /health is this kit
   node cli.mjs status
   node cli.mjs run                foreground
   node cli.mjs doctor
@@ -229,6 +278,8 @@ Usage:
 
 Config search: --config=PATH, $ZCODE_THINKING_KIT_CONFIG,
 ./thinking.config.json, kit dir, then ~/.zcode-thinking-kit/
+
+Env: ZCODE_THINKING_KIT_HOME, ZCODE_LOG_DIR, ZCODE_V2_CONFIG
 `);
 }
 
