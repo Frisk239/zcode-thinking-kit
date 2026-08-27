@@ -168,9 +168,12 @@ async function cmdStop() {
     } catch (e) {
       die(`stop failed: ${e.message}`);
     }
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 50; i++) {
       if (!processExists(rec.pid)) break;
       await sleep(100);
+    }
+    if (processExists(rec.pid)) {
+      die(`stop sent signal but pid ${rec.pid} is still alive; pid file kept`);
     }
     removePidFile(pidPath(), rec.pid);
     console.log(`[OK] stopped pid=${rec.pid}`);

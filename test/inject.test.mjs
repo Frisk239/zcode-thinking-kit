@@ -189,7 +189,8 @@ test('Anthropic budget follows level', () => {
   });
   assert.equal(d.kind, 'inject');
   assert.equal(d.body.thinking.type, 'enabled');
-  assert.equal(d.body.thinking.budget_tokens, '4096');
+  assert.equal(d.body.thinking.budget_tokens, 4096);
+  assert.equal(typeof d.body.thinking.budget_tokens, 'number');
 });
 
 test('substitute nested templates', () => {
