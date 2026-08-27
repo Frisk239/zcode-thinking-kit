@@ -8,6 +8,9 @@ proxy.err.log
 .node-pid
 proxy.pid
 
+# local planning (not published)
+docs/
+
 # local data copies
 .data/
 .kit-data/
